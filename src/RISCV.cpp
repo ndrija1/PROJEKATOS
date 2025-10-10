@@ -139,8 +139,8 @@ void RISCV::handleSupervisorTrap() {
         }
         //TCB::timeSliceCounter = 0;
         //TCB::dispatch();
-        w_sstatus(sstatus);
         w_sepc(sepc);
+        w_sstatus(sstatus);
         w_scause(scause);
     }
 

@@ -2725,8 +2725,8 @@ void RISCV::handleSupervisorTrap() {
     80002c30:	fd843703          	ld	a4,-40(s0)
     80002c34:	00800793          	li	a5,8
     80002c38:	08f70863          	beq	a4,a5,80002cc8 <_ZN5RISCV20handleSupervisorTrapEv+0x11c>
-        w_sstatus(sstatus);
         w_sepc(sepc);
+        w_sstatus(sstatus);
         w_scause(scause);
     }
 
@@ -2827,14 +2827,14 @@ void RISCV::handleSupervisorTrap() {
     80002d34:	00050293          	mv	t0,a0
     __asm__ volatile ("sw t0, 80(x8)");
     80002d38:	04542823          	sw	t0,80(s0)
-        w_sstatus(sstatus);
-    80002d3c:	f0843783          	ld	a5,-248(s0)
-    __asm__ volatile ("csrw sstatus, %[sstatus]" : : [sstatus] "r" (sstatus));
-    80002d40:	10079073          	csrw	sstatus,a5
         w_sepc(sepc);
-    80002d44:	f0043783          	ld	a5,-256(s0)
+    80002d3c:	f0043783          	ld	a5,-256(s0)
     __asm__ volatile ("csrw sepc, %[sepc]" : : [sepc] "r" (sepc));
-    80002d48:	14179073          	csrw	sepc,a5
+    80002d40:	14179073          	csrw	sepc,a5
+        w_sstatus(sstatus);
+    80002d44:	f0843783          	ld	a5,-248(s0)
+    __asm__ volatile ("csrw sstatus, %[sstatus]" : : [sstatus] "r" (sstatus));
+    80002d48:	10079073          	csrw	sstatus,a5
         w_scause(scause);
     80002d4c:	fd843783          	ld	a5,-40(s0)
     __asm__ volatile ("csrw scause, %[scause]" : : [scause] "r" (scause));
@@ -3426,8 +3426,8 @@ int TCB::createThread(TCB** thrHandle,Body b,void*arg,char *stack_space) {
     80003334:	00000097          	auipc	ra,0x0
     80003338:	308080e7          	jalr	776(ra) # 8000363c <_ZN15MemoryAllocator9mem_allocEm>
     8000333c:	00050493          	mv	s1,a0
-    TCB *newT=new TCB(b,arg,stack_space,true);
-    80003340:	00100713          	li	a4,1
+    TCB *newT=new TCB(b,arg,stack_space,false);
+    80003340:	00000713          	li	a4,0
     80003344:	000a0693          	mv	a3,s4
     80003348:	00098613          	mv	a2,s3
     8000334c:	00090593          	mv	a1,s2

@@ -24,7 +24,7 @@ TCB::~TCB() {
 }
 // For original signature
 int TCB::createThread(TCB** thrHandle,Body b,void*arg,char *stack_space) {
-    TCB *newT=new TCB(b,arg,stack_space,true);
+    TCB *newT=new TCB(b,arg,stack_space,false);
     if (newT==nullptr){thrHandle=nullptr;return -1;}
     *thrHandle=newT;
     return 0;
