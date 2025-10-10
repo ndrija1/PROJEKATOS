@@ -2,7 +2,7 @@
 // Created by os on 10/9/25.
 //
 
-#include "../h/memoryAllocator.hpp"
+#include "../h/MemoryAllocator.hpp"
 
 MemoryAllocator::FreeMemBlk* MemoryAllocator::freeMemHead = nullptr;
 void MemoryAllocator::Initialize() {

@@ -11,8 +11,8 @@ public:
     static int mem_free(void* startAddr);
     static void Initialize();
 
-    size_t mem_get_free_space();//returns in bytes
-    size_t mem_get_largest_free_block();//returns in bytes
+    static size_t mem_get_free_space();//returns in bytes
+    static size_t mem_get_largest_free_block();//returns in bytes
 
 private:
     struct FreeMemBlk {

@@ -2,7 +2,9 @@
 // Created by os on 5/18/22.
 //
 
-#include "printing.hpp"
+#include "../h/printing.hpp"
+
+#include "../h/Console.hpp"
 
 uint64 lockPrint = 0;
 
@@ -19,7 +21,14 @@ void printString(char const *string)
     }
     UNLOCK();
 }
-
+void printStringS(const char* string) {
+    LOCK();
+    while (*string != '\0') {
+        Console::putc_S(*string);
+        string++;
+    }
+    UNLOCK();
+}
 char* getString(char *buf, int max) {
     LOCK();
     int i, cc;
@@ -75,6 +84,33 @@ void printInt(int xx, int base, int sgn)
 
     while(--i >= 0)
         putc(buf[i]);
+
+    UNLOCK();
+}
+
+void printIntS(int xx, int base, int sgn) {
+    LOCK();
+    char buf[16];
+    int i, neg;
+    uint x;
+
+    neg = 0;
+    if(sgn && xx < 0){
+        neg = 1;
+        x = -xx;
+    } else {
+        x = xx;
+    }
+
+    i = 0;
+    do{
+        buf[i++] = digits[x % base];
+    }while((x /= base) != 0);
+    if(neg)
+        buf[i++] = '-';
+
+    while(--i >= 0)
+        Console::putc_S(buf[i]);
 
     UNLOCK();
 }

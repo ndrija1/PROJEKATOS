@@ -8,7 +8,7 @@
 #include "Scheduler.hpp"
 #include "../lib/hw.h"
 #include  "RISCV.hpp"
-#include  "memoryAllocator.hpp"
+#include  "MemoryAllocator.hpp"
 //Thread C b
 class TCB {
 public:
@@ -83,6 +83,7 @@ private:
 
     friend class RISCV;
     friend class Semaphore;
+    friend class Console;
 
 
     static void threadWrapper();

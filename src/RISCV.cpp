@@ -1,9 +1,10 @@
 #include "../h/RISCV.hpp"
+#include "../h/Console.hpp"
 #include "../h/TCB.hpp"
-#include "../h/print.hpp"
+#include "../h/printing.hpp"
 #include "../h/Scheduler.hpp"
-#include "../lib/console.h"
-
+#include "../h/Semaphore.hpp"
+#include "../h/MemoryAllocator.hpp"
 
 void RISCV::popSppSpie() {
      mc_sstatus(SSTATUS_SPP);
@@ -16,253 +17,206 @@ void RISCV::systemPopSppSpie() {
     __asm__ volatile("sret");
 }
 void RISCV::handleSupervisorTrap() {
-    uint64  scause = r_scause();
-    if (scause==0x0000000000000009UL) {
+    uint64  volatile scause = r_scause();
+    uint64 volatile code=r_a0();
+    uint64 volatile arg1=r_a1();
+    uint64 volatile arg2=r_a2();
+    uint64 volatile arg3=r_a3();
+    uint64 volatile arg4=r_a4();
+
+    if (scause == 0x0000000000000009UL || scause == 0x0000000000000008UL ) {
         //interrupt: no cause:call from S-mode
-        uint64  sepc = r_sepc()+4;
-        uint64  sstatus = r_sstatus();
-        TCB::timeSliceCounter = 0;
-        TCB::dispatch();
+        //Ecall from sys/usr mode
+        uint64 volatile sepc = r_sepc()+4;
+        uint64 volatile sstatus = r_sstatus();
+        switch (code) {
+                //mem_alloc
+            case 0x01: {
+                size_t volatile size_in_bytes=r_a1()*MEM_BLOCK_SIZE;
+                void *ret=MemoryAllocator::mem_alloc(size_in_bytes);
+                returnSysCall((size_t)ret);
+                break;
+            }
+                //mem_free
+            case 0x02: {
+                void* volatile start=(void*)r_a1();
+                int ret=MemoryAllocator::mem_free(start);
+                returnSysCall((size_t)ret);
+                break;
+            }
+                //mem_get_free_space
+            case 0x03: {
+                size_t ret=MemoryAllocator::mem_get_free_space();
+                returnSysCall(ret);
+                break;
+            }
+                //mem_get_largest_free_block
+            case 0x04: {
+                size_t ret=MemoryAllocator::mem_get_largest_free_block();
+                returnSysCall(ret);
+                break;
+            }
+                //thread_create
+            case 0x11:{
+                TCB **threadcreatHandle=(TCB**)arg1;
+                TCB::Body routine=(TCB::Body)arg2;
+                void *arg=(void*)arg3;
+                char *stack=(char*)arg4;
+                int ret = TCB::createThread(threadcreatHandle,routine,arg,stack);
+
+                returnSysCall((size_t)ret);
+                break;
+            }
+                //thread_exit
+            case 0x12:{
+                TCB::running->setFinished(true);
+                TCB::dispatch();
+                break;
+            }
+                //dispatch
+            case 0x13: {
+                TCB::dispatch();
+                break;
+            }
+                //sem_open()
+            case 0x21: {
+                Semaphore **semHandle=(Semaphore**)arg1;
+                unsigned initialize=(unsigned)arg2;
+                int ret=Semaphore::createSemaphore(semHandle,initialize);
+                returnSysCall((size_t)ret);
+                break;
+            }
+                //sem_close()
+            case 0x22: {
+                Semaphore *semId=(Semaphore*)arg1;
+                int ret=Semaphore::closeSemaphore(semId);
+                delete semId;
+
+                returnSysCall((size_t)ret);
+                break;
+
+            }
+                //sem_wait()
+            case 0x23: {
+                Semaphore *semId=(Semaphore*)arg1;
+                int ret=semId->sem_wait();
+
+                returnSysCall((size_t)ret);
+                break;
+            }
+                //sem_signa;()
+            case 0x24: {
+                Semaphore *semId=(Semaphore*)arg1;
+                int ret=semId->sem_signal();
+
+                returnSysCall((size_t)ret);
+                break;
+            }
+                //time_sleep()
+            case 0x31: {
+                time_t time=(time_t)arg1;
+                TCB::timeSleep(time);
+
+                break;
+            }
+                //getc()
+            case 0x41: {
+                char ret=Console::consoleGetcBuff();
+                returnSysCall((size_t)ret);
+                break;
+            }
+                //putc()
+            case 0x42: {
+                char character=(char)arg1;
+                Console::consolePutcBuff(character);
+                break;
+            }
+                //Unsupported system-call code
+            default: {
+                printStringS("Unsupported system-call code.");
+                break;
+            }
+        }
+        //TCB::timeSliceCounter = 0;
+        //TCB::dispatch();
         w_sstatus(sstatus);
         w_sepc(sepc);
-        //w_scause(scause);
+        w_scause(scause);
     }
 
     else if (scause == 0x8000000000000001UL) {
     //interrupt: yes, cause code: supervisor software interrupt
-        TCB::timeSliceCounter++;
-        if (TCB::timeSliceCounter>=TCB::running->time_slice()) {
-
-            uint64 sepc = r_sepc();
-            uint64  sstatus = r_sstatus();
-            TCB::timeSliceCounter = 0;
-            TCB::dispatch();
-            w_sstatus(sstatus);
-            w_sepc(sepc);
-            //w_scause(scause);
-        }
+        //Timer interrupt
         mc_sip(SIP_SSIP);
 
-
-    }
-    else if (scause == 0x8000000000000009UL) {
-        console_handler();
-    }
-    else {
-        //unexpected
-        // unexpected trap cause
-       // size_t volatile sepc = r_sepc();
-      //  printString("Exception! scause: ");
-        //printIntS(scause);
-       // printString("\n sepc: ");
-        //printIntS(sepc);
-       // while (true) {}
-    }
-}
-
-/*
-void RISCV::handleInterruptRoutine() {
-    size_t volatile scause = r_scause();
-    size_t volatile code = r_a0();
-    size_t volatile arg1 = r_a1();
-    size_t volatile arg2 = r_a2();
-    size_t volatile arg3 = r_a3();
-    size_t volatile arg4 = r_a4();
-
-    if (scause == 0x8000000000000001UL) {
-        // timer interrupt
-        mc_sip(SIP_SSIP);
-
-        // logic for sem_timedwait
-        Sem::allSemaphores.setFirst();
-        while (Sem::allSemaphores.getCurrent()) {
-            if (Sem::allSemaphores.getCurrent()->timeout < 0) continue;
-            Sem::allSemaphores.getCurrent()->timeout--;
-            if (Sem::allSemaphores.getCurrent()->timeout == 0) {
-                while (Sem::allSemaphores.getCurrent()->blocked.peekFirst()) {
-                    Scheduler::put(Sem::allSemaphores.getCurrent()->blocked.removeFirst());
-                }
-                Sem::allSemaphores.getCurrent()->timedOut = true;
+        Semaphore::allSemaphoresQueue.setFirst();
+        while (Semaphore::allSemaphoresQueue.getCurrent()!=nullptr) {
+            if (Semaphore::allSemaphoresQueue.getCurrent()->timeout<0) {
+                continue;
             }
-            Sem::allSemaphores.next();
+            Semaphore::allSemaphoresQueue.getCurrent()->timeout-=1;
+            if (Semaphore::allSemaphoresQueue.getCurrent()->timeout==0) {
+                while (Semaphore::allSemaphoresQueue.getCurrent()->blockedQueue.peekFirst()) {
+                    Scheduler::put(Semaphore::allSemaphoresQueue.getCurrent()->blockedQueue.removeFIrst());
+                }
+                Semaphore::allSemaphoresQueue.getCurrent()->timedOut=true;
+            }
+            Semaphore::allSemaphoresQueue.next();
         }
 
-        // logic for time_sleep
         TCB::sleepingThreads.setFirst();
-        while (TCB::sleepingThreads.getCurrent()) {
-            TCB::sleepingThreads.getCurrent()->timeSleeping--;
-            if (TCB::sleepingThreads.getCurrent()->timeSleeping == 0) {
+        while (TCB::sleepingThreads.getCurrent()!=nullptr) {
+            TCB::sleepingThreads.getCurrent()->timeSleeping-=1;
+            if (TCB::sleepingThreads.getCurrent()->timeSleeping==0) {
                 Scheduler::put(TCB::sleepingThreads.removeCurrent());
             }
             TCB::sleepingThreads.next();
         }
 
-        // asynchronous context switch
+
         TCB::timeSliceCounter++;
-        if (TCB::timeSliceCounter >= DEFAULT_TIME_SLICE) {
-            size_t volatile sepc = r_sepc();
-            size_t volatile sstatus = r_sstatus();
+        if (TCB::timeSliceCounter>=DEFAULT_TIME_SLICE) {
+
+            uint64 volatile sepc = r_sepc();
+            uint64 volatile sstatus = r_sstatus();
             TCB::timeSliceCounter = 0;
             TCB::dispatch();
-            w_sepc(sepc);
             w_sstatus(sstatus);
+            w_sepc(sepc);
             w_scause(scause);
         }
+       // mc_sip(SIP_SSIP);
 
-    } else if (scause == 0x8000000000000009UL) {
-        size_t volatile sepc = r_sepc();
-        size_t volatile sstatus = r_sstatus();
 
-        int intr = plic_claim();
+    }
+    else if (scause == 0x8000000000000009UL) {
+        uint64 volatile sepc=r_sepc();
+        uint64 volatile sstatus=r_sstatus();
+        int interrupt=plic_claim();
         mc_sip(SIP_SEIP);
 
-        //console interrupt
-        if (intr == CONSOLE_IRQ) {
+        //Console interrupt
+        if (interrupt==CONSOLE_IRQ) {
             // polling
             while ((*((char*)CONSOLE_STATUS) & CONSOLE_RX_STATUS_BIT)) {
-                char c = (char)(*((char*)CONSOLE_RX_DATA));
-                if ((int)c == 13) c = '\n';
-                Cons::inputBufferPut(c);
+                char character = (char)(*((char*)CONSOLE_RX_DATA));
+                if ((int)character == 13) character = '\n';
+                Console::inputBuffAppend(character);
             }
         }
-
-        plic_complete(intr);
+        plic_complete(interrupt);
 
         w_sepc(sepc);
         w_sstatus(sstatus);
         w_scause(scause);
-    } else if (scause == 0x0000000000000008UL || scause == 0x0000000000000009UL) {
-        // ecall from system/user mode
-        size_t volatile sepc = r_sepc() + 4;
-        size_t volatile sstatus = r_sstatus();
-        switch (code) {
-            // mem_alloc
-            case 0x01: {
-                size_t volatile sizeInBytes = r_a1() * MEM_BLOCK_SIZE;
-                void* retVal = MemoryAllocator::memAlloc(sizeInBytes);
-
-                RISCV::returnSysCall((size_t)retVal);
-                break;
-            }
-            // mem_free
-            case 0x02: {
-                void *volatile startAddr = (void *) r_a1();
-                int retVal = MemoryAllocator::memFree(startAddr);
-
-                RISCV::returnSysCall((size_t)retVal);
-                break;
-            }
-            // thread_create
-            case 0x11: {
-                TCB **threadHandlePtr = (TCB**)arg1;
-                TCB::Body startRoutine = (TCB::Body)arg2;
-                void *arg = (void *)arg3;
-                char *stackSpace = (char *)arg4;
-                int retVal = TCB::createThread(threadHandlePtr, startRoutine, arg, stackSpace);
-
-                RISCV::returnSysCall((size_t)retVal);
-                break;
-            }
-            // thread_exit
-            case 0x12: {
-                TCB::runningThread->setFinished(true);
-                TCB::dispatch();
-                break;
-            }
-            // thread_dispatch
-            case 0x13: {
-                TCB::dispatch();
-                break;
-            }
-            // sem_open
-            case 0x21: {
-                Sem** handle = (Sem**)arg1;
-                unsigned init = (unsigned)arg2;
-                int retVal = Sem::createSemaphore(handle, init);
-
-                RISCV::returnSysCall((size_t)retVal);
-                break;
-            }
-            // sem_close
-            case 0x22: {
-                Sem* id = (Sem*)arg1;
-                int retVal = Sem::closeSemaphore(id);
-                delete id;
-
-                RISCV::returnSysCall((size_t)retVal);
-                break;
-            }
-            // sem_wait
-            case 0x23: {
-                Sem* id = (Sem*)arg1;
-                int retVal = id->semWait();
-
-                RISCV::returnSysCall((size_t)retVal);
-                break;
-            }
-            // sem_signal
-            case 0x24: {
-                Sem* id = (Sem*)arg1;
-                int retVal = id->semSignal();
-
-                RISCV::returnSysCall((size_t)retVal);
-                break;
-            }
-            // sem_timedwait
-            case 0x25: {
-                Sem* id = (Sem*)arg1;
-                time_t timeout = (time_t)arg2;
-                int retVal = id->semTimedWait(timeout);
-
-                RISCV::returnSysCall((size_t)retVal);
-                break;
-            }
-            // sem_trywait
-            case 0x26: {
-                Sem* id = (Sem*)arg1;
-                int retVal = id->semTryWait();
-
-                RISCV::returnSysCall((size_t)retVal);
-                break;
-            }
-            // time_sleep
-            case 0x31: {
-                time_t time = (time_t)arg1;
-                TCB::timeSleep(time);
-                break;
-            }
-            // getc
-            case 0x41: {
-                char retVal = Cons::consGetc();
-
-                RISCV::returnSysCall((size_t)retVal);
-                break;
-            }
-            // putc
-            case 0x42: {
-                char c = (char)arg1;
-                Cons::consPutc(c);
-                break;
-            }
-            // unsupported system call code
-            default: {
-                printStringS("Unsupported system call code.");
-                break;
-            }
-        }
-
-        w_sepc(sepc);
-        w_sstatus(sstatus);
-        w_scause(scause);
-    } else {
-        // unexpected trap cause
+    }
+    else {
+        //Unexpected trap cause
         size_t volatile sepc = r_sepc();
-        printStringS("Exception! scause: ");
+        printStringS("Exception!!! scause: ");
         printIntS(scause);
         printStringS("\n sepc: ");
         printIntS(sepc);
         while (true) {}
     }
 }
-
-*/

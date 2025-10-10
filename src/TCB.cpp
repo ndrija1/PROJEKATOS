@@ -5,7 +5,6 @@
 #include "../h/TCB.hpp"
 #include "../h/RISCV.hpp"
 #include  "../h/Scheduler.hpp"
-#include "../lib/console.h"
 List<TCB>TCB::sleepingThreads;
 TCB *TCB::running = nullptr;
 uint64 TCB::timeSliceCounter=0;
@@ -37,7 +36,7 @@ bool TCB::schedulerIsEmpty() {
 
 void TCB::yield(){
 
-    __asm__ __volatile__("ecall");
+    __asm__ volatile("ecall");
 
 }
 

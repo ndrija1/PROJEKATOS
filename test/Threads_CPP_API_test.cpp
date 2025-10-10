@@ -1,6 +1,6 @@
 #include "../h/syscall_cpp.hpp"
 
-#include "printing.hpp"
+#include "../h/printing.hpp"
 
 static volatile bool finishedA = false;
 static volatile bool finishedB = false;

@@ -1,5 +1,5 @@
-build/src/userMainTests.o: src/userMainTests.cpp src/../test/printing.hpp \
- src/../test/../h/syscall_c.hpp src/../test/../h/../lib/hw.h \
+build/src/userMainTests.o: src/userMainTests.cpp src/../h/printing.hpp \
+ src/../h/syscall_c.hpp src/../h/../lib/hw.h \
  src/../test/Threads_C_API_test.hpp src/../test/Threads_CPP_API_test.hpp \
  src/../test/System_Mode_test.hpp \
  src/../test/ConsumerProducer_C_API_test.hpp \
@@ -7,11 +7,11 @@ build/src/userMainTests.o: src/userMainTests.cpp src/../test/printing.hpp \
  src/../test/ThreadSleep_C_API_test.hpp \
  src/../test/ConsumerProducer_CPP_API_test.hpp
 
-src/../test/printing.hpp:
+src/../h/printing.hpp:
 
-src/../test/../h/syscall_c.hpp:
+src/../h/syscall_c.hpp:
 
-src/../test/../h/../lib/hw.h:
+src/../h/../lib/hw.h:
 
 src/../test/Threads_C_API_test.hpp:
 
