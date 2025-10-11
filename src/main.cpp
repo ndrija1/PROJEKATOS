@@ -15,7 +15,7 @@ void userMainWrapper(void* arg) {
 
 void main() {
     // initialize the kernel
-    MemoryAllocator::Initialize();
+    MemoryAllocator::initialize();
     RISCV::w_stvec((size_t)(&RISCV::supervisorTrap));
 
     thread_t threads[4];
@@ -23,8 +23,8 @@ void main() {
     TCB::running = threads[0]; // must be init. imm. after we create a thread for main
 
     // terminal thread for putc and initialize buffer for getc
-    Console::setInputBuff();
-    Console::startPutcThread(&threads[2]);
+    Console::initInputBuffer();
+    Console::startOutputService(&threads[2]);
 
     thread_create(&threads[1], &userMainWrapper, nullptr);
 

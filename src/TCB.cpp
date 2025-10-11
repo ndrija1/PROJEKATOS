@@ -5,9 +5,17 @@
 #include "../h/TCB.hpp"
 #include "../h/RISCV.hpp"
 #include  "../h/Scheduler.hpp"
+
+//List to track sleeping threads
 List<TCB>TCB::sleepingThreads;
+
+//Currently active thread
 TCB *TCB::running = nullptr;
+
+//Track time slices consumed
 uint64 TCB::timeSliceCounter=0;
+
+
 TCB::TCB(Body b, void *arg, char *stack_space, bool system_mode) {
     this->body = b;
     this->stack = stack_space;
@@ -20,8 +28,11 @@ TCB::TCB(Body b, void *arg, char *stack_space, bool system_mode) {
     if (body!=nullptr) Scheduler::put(this);
 }
 TCB::~TCB() {
-    MemoryAllocator::mem_free(stack);
+    if (stack){
+        MemoryAllocator::mem_free(stack);
+    }
 }
+
 // For original signature
 int TCB::createThread(TCB** thrHandle,Body b,void*arg,char *stack_space) {
     TCB *newT=new TCB(b,arg,stack_space,false);
@@ -34,6 +45,7 @@ bool TCB::schedulerIsEmpty() {
     return Scheduler::peekFirst() == nullptr;
 }
 
+//Voluntarily yield execution (triggers software interrupt)
 void TCB::yield(){
 
     __asm__ volatile("ecall");
@@ -48,6 +60,8 @@ void TCB::dispatch() {
     running=Scheduler::get();
     contextSwitch(&old->context,&running->context);
 }
+
+//Wrapper functions that are used to prepare system for thread, to execute the thread function and do the cleanup after
 void TCB::threadWrapper() {
     RISCV::popSppSpie();
     running->body(running->arg);
@@ -63,7 +77,7 @@ void TCB::systemThreadWrapper() {
     RISCV::w_a0(0x13);
     TCB::yield();
 }
-
+//The difference is subtle but important: system threads might already run in supervisor mode and don’t need the same privilege restoration.
 void TCB::timeSleep(time_t time) {
     running->timeSleeping=time;
     sleepingThreads.addFirst(running);

@@ -4,45 +4,53 @@
 
 #include "../h/ConsoleBoundedBuffer.hpp"
 
-//Implementacija uzeta iz 278 strane knjige OS1, BoundedBuffer
 
-ConsoleBoundedBuffer::ConsoleBoundedBuffer(int len):len(len),head(0),tail(0) {
+ConsoleBoundedBuffer::ConsoleBoundedBuffer(int len)
+    :len(len),head(0),tail(0) {
+
     buff=new char[len];
-    Semaphore::createSemaphore(&mutexT,1);
-    Semaphore::createSemaphore(&mutexH,1);
-    Semaphore::createSemaphore(&input,0);
-    Semaphore::createSemaphore(&output,len);
+
+    Semaphore::createSemaphore(&mutexTail,1);
+    Semaphore::createSemaphore(&mutexHead,1);
+    Semaphore::createSemaphore(&availableItems,0);
+    Semaphore::createSemaphore(&availableSpaces,len);
 }
 
 ConsoleBoundedBuffer::~ConsoleBoundedBuffer() {
     delete buff;
-    Semaphore::closeSemaphore(output);
-    Semaphore::closeSemaphore(input);
-    Semaphore::closeSemaphore(mutexT);
-    Semaphore::closeSemaphore(mutexH);
 
-    delete input;
-    delete output;
-    delete mutexT;
-    delete mutexH;
+    Semaphore::closeSemaphore(availableSpaces);
+    Semaphore::closeSemaphore(availableItems);
+    Semaphore::closeSemaphore(mutexTail);
+    Semaphore::closeSemaphore(mutexHead);
+
+    delete availableItems;
+    delete availableSpaces;
+    delete mutexTail;
+    delete mutexHead;
 }
 
 void ConsoleBoundedBuffer::append(char character) {
-    output->sem_wait();
-    mutexT->sem_wait();
+    availableSpaces->sem_wait();
+    mutexTail->sem_wait();
+
     buff[tail]=character;
     tail=(tail+1)% len;
-    mutexT->sem_signal();
-    input->sem_signal();
+
+    mutexTail->sem_signal();
+    availableItems->sem_signal();
 }
 
 char ConsoleBoundedBuffer::take() {
-    input->sem_wait();
-    mutexH->sem_wait();
+    availableItems->sem_wait();
+    mutexHead->sem_wait();
+
     char temp=buff[head];
     head=(head+1)% len;
-    mutexH->sem_signal();
-    output->sem_signal();
+
+    mutexHead->sem_signal();
+    availableSpaces->sem_signal();
+
     return temp;
 }
 

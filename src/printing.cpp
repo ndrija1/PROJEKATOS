@@ -24,7 +24,7 @@ void printString(char const *string)
 void printStringS(const char* string) {
     LOCK();
     while (*string != '\0') {
-        Console::putc_S(*string);
+        Console::writeCharSync(*string);
         string++;
     }
     UNLOCK();
@@ -110,7 +110,7 @@ void printIntS(int xx, int base, int sgn) {
         buf[i++] = '-';
 
     while(--i >= 0)
-        Console::putc_S(buf[i]);
+        Console::writeCharSync(buf[i]);
 
     UNLOCK();
 }

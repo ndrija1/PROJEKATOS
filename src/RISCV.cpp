@@ -6,6 +6,9 @@
 #include "../h/Semaphore.hpp"
 #include "../h/MemoryAllocator.hpp"
 
+//---------------------------------------------------------
+// Context and privilege utilities
+//---------------------------------------------------------
 void RISCV::popSppSpie() {
      mc_sstatus(SSTATUS_SPP);
     __asm__ volatile("csrw sepc, ra");
@@ -16,7 +19,15 @@ void RISCV::systemPopSppSpie() {
     __asm__ volatile("csrw sepc, ra");
     __asm__ volatile("sret");
 }
+
+//---------------------------------------------------------
+// Core Supervisor Trap Handler
+//---------------------------------------------------------
 void RISCV::handleSupervisorTrap() {
+
+    //volatile used to tell the compiler not to optimize acces to the variable
+    //because its value may change outside the programs normal control bcs of context-switching, interrupts etc
+
     uint64  volatile scause = r_scause();
     uint64 volatile code=r_a0();
     uint64 volatile arg1=r_a1();
@@ -24,12 +35,21 @@ void RISCV::handleSupervisorTrap() {
     uint64 volatile arg3=r_a3();
     uint64 volatile arg4=r_a4();
 
+    //-----------------------------------------------------
+    // System call from user or supervisor mode
+    //-----------------------------------------------------
+
     if (scause == 0x0000000000000009UL || scause == 0x0000000000000008UL ) {
         //interrupt: no cause:call from S-mode
         //Ecall from sys/usr mode
+
         uint64 volatile sepc = r_sepc()+4;
         uint64 volatile sstatus = r_sstatus();
+
+
         switch (code) {
+                //Memory allocation syscalls
+
                 //mem_alloc
             case 0x01: {
                 size_t volatile size_in_bytes=r_a1()*MEM_BLOCK_SIZE;
@@ -56,6 +76,8 @@ void RISCV::handleSupervisorTrap() {
                 returnSysCall(ret);
                 break;
             }
+                // Thread management syscalls
+
                 //thread_create
             case 0x11:{
                 TCB **threadcreatHandle=(TCB**)arg1;
@@ -78,6 +100,8 @@ void RISCV::handleSupervisorTrap() {
                 TCB::dispatch();
                 break;
             }
+                // Semaphore syscalls
+
                 //sem_open()
             case 0x21: {
                 Semaphore **semHandle=(Semaphore**)arg1;
@@ -104,7 +128,7 @@ void RISCV::handleSupervisorTrap() {
                 returnSysCall((size_t)ret);
                 break;
             }
-                //sem_signa;()
+                //sem_signal()
             case 0x24: {
                 Semaphore *semId=(Semaphore*)arg1;
                 int ret=semId->sem_signal();
@@ -121,14 +145,14 @@ void RISCV::handleSupervisorTrap() {
             }
                 //getc()
             case 0x41: {
-                char ret=Console::consoleGetcBuff();
+                char ret=Console::readChar();
                 returnSysCall((size_t)ret);
                 break;
             }
                 //putc()
             case 0x42: {
                 char character=(char)arg1;
-                Console::consolePutcBuff(character);
+                Console::writeChar(character);
                 break;
             }
                 //Unsupported system-call code
@@ -144,11 +168,14 @@ void RISCV::handleSupervisorTrap() {
         w_scause(scause);
     }
 
+    //-----------------------------------------------------
+    // Timer interrupt
+    //-----------------------------------------------------
+
     else if (scause == 0x8000000000000001UL) {
-    //interrupt: yes, cause code: supervisor software interrupt
-        //Timer interrupt
         mc_sip(SIP_SSIP);
 
+        // Handle semaphores with timeouts
         Semaphore::allSemaphoresQueue.setFirst();
         while (Semaphore::allSemaphoresQueue.getCurrent()!=nullptr) {
             if (Semaphore::allSemaphoresQueue.getCurrent()->timeout<0) {
@@ -164,6 +191,7 @@ void RISCV::handleSupervisorTrap() {
             Semaphore::allSemaphoresQueue.next();
         }
 
+        // Handle sleeping threads
         TCB::sleepingThreads.setFirst();
         while (TCB::sleepingThreads.getCurrent()!=nullptr) {
             TCB::sleepingThreads.getCurrent()->timeSleeping-=1;
@@ -173,10 +201,9 @@ void RISCV::handleSupervisorTrap() {
             TCB::sleepingThreads.next();
         }
 
-
+        // Time slice
         TCB::timeSliceCounter++;
         if (TCB::timeSliceCounter>=DEFAULT_TIME_SLICE) {
-
             uint64 volatile sepc = r_sepc();
             uint64 volatile sstatus = r_sstatus();
             TCB::timeSliceCounter = 0;
@@ -186,9 +213,12 @@ void RISCV::handleSupervisorTrap() {
             w_scause(scause);
         }
        // mc_sip(SIP_SSIP);
-
-
     }
+
+    //-----------------------------------------------------
+    // External interrupt (e.g., console)
+    //-----------------------------------------------------
+
     else if (scause == 0x8000000000000009UL) {
         uint64 volatile sepc=r_sepc();
         uint64 volatile sstatus=r_sstatus();
@@ -201,7 +231,7 @@ void RISCV::handleSupervisorTrap() {
             while ((*((char*)CONSOLE_STATUS) & CONSOLE_RX_STATUS_BIT)) {
                 char character = (char)(*((char*)CONSOLE_RX_DATA));
                 if ((int)character == 13) character = '\n';
-                Console::inputBuffAppend(character);
+                Console::onCharRecieved(character);
             }
         }
         plic_complete(interrupt);
@@ -210,8 +240,10 @@ void RISCV::handleSupervisorTrap() {
         w_sstatus(sstatus);
         w_scause(scause);
     }
+    //-----------------------------------------------------
+    // Unexpected trap
+    //-----------------------------------------------------
     else {
-        //Unexpected trap cause
         size_t volatile sepc = r_sepc();
         printStringS("Exception!!! scause: ");
         printIntS(scause);

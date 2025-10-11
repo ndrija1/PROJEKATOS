@@ -6,15 +6,23 @@
 #define PROJECT_BASE_V1_1_CONSOLEBUFFER_HPP
 #include "Semaphore.hpp"
 
-//implementacija uzeta iz knjige 278 strana, prosirena verzija BoundedBuffer-a
+// Thread-safe circular character buffer for console I/O.
+// Implementation based on the bounded buffer algorithm from OS1 textbook (p. 278),
+// adapted with separate head/tail mutexes and semaphores for input/output slots.
 
 class ConsoleBoundedBuffer {
 
 public:
+    //Constructor
     ConsoleBoundedBuffer(int len);
+
+    //Destructor
     ~ConsoleBoundedBuffer();
 
+    // Removes and returns a character from the buffer (blocks if empty)
     char take();
+
+    // Adds a character to the buffer (blocks if full)
     void append(char character);
 
 private:
@@ -22,10 +30,10 @@ private:
     char *buff;
     int head,tail;
 
-    Semaphore *mutexH;
-    Semaphore *mutexT;
-    Semaphore *input;
-    Semaphore *output;
+    Semaphore *mutexHead;   //Protects head
+    Semaphore *mutexTail;   //Protects tail
+    Semaphore *availableItems;  //"Counts" filled slots
+    Semaphore *availableSpaces; //"Counts" empty slots
 
 };
 #endif //PROJECT_BASE_V1_1_CONSOLEBUFFER_HPP

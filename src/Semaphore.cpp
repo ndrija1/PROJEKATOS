@@ -4,6 +4,7 @@
 #include "../h/Scheduler.hpp"
 #include "../h/Semaphore.hpp"
 
+//Static member definition
 List<Semaphore> Semaphore::allSemaphoresQueue;
 
 int Semaphore::createSemaphore(Semaphore **semHandle, unsigned val) {
@@ -22,6 +23,7 @@ int Semaphore::closeSemaphore(Semaphore *id) {
     }
     return 0;
 }
+
 int Semaphore::sem_wait() {
     if (--val<0) {
         block();
@@ -31,6 +33,7 @@ int Semaphore::sem_wait() {
     }
     return 0;
 }
+
 int Semaphore::sem_signal() {
     if (++val<=0) {
         unblock();
@@ -51,7 +54,6 @@ void Semaphore::unblock() {
         Scheduler::put(thread);
     }
 }
-
 
 int Semaphore::semTryToWait() {
     if (this->getVal()-1>=0) {
