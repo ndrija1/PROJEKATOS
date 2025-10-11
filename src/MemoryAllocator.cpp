@@ -20,69 +20,62 @@ void MemoryAllocator::initialize() {
 void* MemoryAllocator::mem_alloc(size_t size) {
     if (!freeListHead || size == 0) return nullptr;
 
-
     size_t totalBytes = size + sizeof(FreeBlock);
     size_t blocksNeeded = (totalBytes / MEM_BLOCK_SIZE) + (totalBytes % MEM_BLOCK_SIZE == 0 ? 0 : 1);
-    
 
-    
-    FreeBlock* prev = nullptr;
-    FreeBlock* curr = freeListHead;
-    void* new_blk = nullptr;
+    FreeBlock* current_prev = nullptr;
+    FreeBlock* current_block = freeListHead;
 
+    FreeBlock* best_fit_prev = nullptr;
+    FreeBlock* best_fit_block = nullptr;
 
-    //First-fit search
-    while (curr) {
-        if (curr->sizeInBlocks >= blocksNeeded) {  //Found a big enough fragment
-            //Remove it from the free fragments linked list
-            if (!prev) { //It's the first element in the list
-                if (curr->sizeInBlocks - blocksNeeded > 0) {
-                    //Shrink the fragment
-                    freeListHead = curr + blocksNeeded * MEM_BLOCK_SIZE;
-                    freeListHead->sizeInBlocks = curr->sizeInBlocks - blocksNeeded;
-                    freeListHead->next = curr->next;
-                    curr->sizeInBlocks = blocksNeeded; //Update the new fragment size
-                }
-                else {
-                    freeListHead = freeListHead->next;
-                }
-                new_blk = curr;
+    // Best-fit search: Find the smallest block that is large enough.
+    while (current_block) {
+        if (current_block->sizeInBlocks >= blocksNeeded) {
+            if (!best_fit_block || current_block->sizeInBlocks < best_fit_block->sizeInBlocks) {
+                best_fit_block = current_block;
+                best_fit_prev = current_prev;
             }
-            else if (!curr->next) { //It's the last element in the list
-                if (curr->sizeInBlocks - blocksNeeded > 0) {
-                    //Shrink the fragment
-                    FreeBlock* newFreeFragmentAddr = curr + blocksNeeded * MEM_BLOCK_SIZE;
-                    prev->next = newFreeFragmentAddr;
-                    newFreeFragmentAddr->sizeInBlocks = curr->sizeInBlocks - blocksNeeded;
-                    newFreeFragmentAddr->next = curr->next;
-                    curr->sizeInBlocks = blocksNeeded; //Update the new fragment size
-                }
-                else {
-                    prev->next = nullptr;
-                }
-                new_blk = curr;
-            }
-            else {
-                if (curr->sizeInBlocks - blocksNeeded > 0) {
-                    // shrink the fragment
-                    FreeBlock* newFreeFragmentAddr = curr + blocksNeeded * MEM_BLOCK_SIZE;
-                    prev->next = newFreeFragmentAddr;
-                    newFreeFragmentAddr->sizeInBlocks = curr->sizeInBlocks - blocksNeeded;
-                    newFreeFragmentAddr->next = curr->next;
-                    curr->sizeInBlocks = blocksNeeded; // update the allocated fragment size
-                }
-                else {
-                    prev->next = curr->next;
-                }
-                new_blk = curr;
-            }
-            break;
         }
-        prev = curr;
-        curr = curr->next;
+        current_prev = current_block;
+        current_block = current_block->next;
     }
 
-    return (new_blk ? ((FreeBlock*)new_blk + 1) : nullptr);
+    // If a suitable block was found, allocate from it.
+    if (best_fit_block) {
+        size_t remainingBlocks = best_fit_block->sizeInBlocks - blocksNeeded;
+
+        if (remainingBlocks > 0) {
+            // The block is larger than needed, so split it.
+            // Create a new free block from the remaining space.
+            FreeBlock* newFreeBlock = (FreeBlock*)((char*)best_fit_block + blocksNeeded * MEM_BLOCK_SIZE);
+            newFreeBlock->sizeInBlocks = remainingBlocks;
+            newFreeBlock->next = best_fit_block->next;
+
+            // Link the new free block into the list.
+            if (best_fit_prev) {
+                best_fit_prev->next = newFreeBlock;
+            } else {
+                // The best-fit block was the head of the list.
+                freeListHead = newFreeBlock;
+            }
+            // Update the size of the allocated block.
+            best_fit_block->sizeInBlocks = blocksNeeded;
+        } else {
+            // The block is exactly the right size, so just remove it from the list.
+            if (best_fit_prev) {
+                best_fit_prev->next = best_fit_block->next;
+            } else {
+                // The best-fit block was the head of the list.
+                freeListHead = best_fit_block->next;
+            }
+        }
+        // Return a pointer to the usable memory area (after the header).
+        return (void*)(best_fit_block + 1);
+    }
+
+    // No suitable block found.
+    return nullptr;
 }
 
 int MemoryAllocator::mem_free(void *ptr) {

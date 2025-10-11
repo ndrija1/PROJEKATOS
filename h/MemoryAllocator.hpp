@@ -14,7 +14,7 @@ public:
     // Initialize allocator over [HEAP_START_ADDR, HEAP_END_ADDR)
     static void initialize();
 
-    // Allocate a memory block of at least `size` bytes
+    // Allocate a memory block of at least `size` bytes (best-fit)
     static void* mem_alloc(size_t size);
 
     // Free a previously allocated block
