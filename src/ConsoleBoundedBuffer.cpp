@@ -17,6 +17,7 @@ ConsoleBoundedBuffer::ConsoleBoundedBuffer(int len)
 }
 
 ConsoleBoundedBuffer::~ConsoleBoundedBuffer() {
+    //delete[] buff;
     delete buff;
 
     Semaphore::closeSemaphore(availableSpaces);

@@ -19,21 +19,25 @@ void main() {
     RISCV::w_stvec((size_t)(&RISCV::supervisorTrap));
 
     thread_t threads[4];
-    thread_create(&threads[0], nullptr, nullptr);
-    TCB::running = threads[0]; // must be init. imm. after we create a thread for main
+    thread_create(&threads[0], nullptr, nullptr);//Idle/main kernel thread
+    TCB::running = threads[0]; // must be init. imm. after we create a thread for main, without this scheduler and context switch have no reference to curr head
 
-    // terminal thread for putc and initialize buffer for getc
+    //Terminal thread for putc and initialize buffer for getc
     Console::initInputBuffer();
     Console::startOutputService(&threads[2]);
 
+    //Start user thread (first level user thread)
     thread_create(&threads[1], &userMainWrapper, nullptr);
 
+    //Enable interrupts and run scheduler (Enables supervisor Interrupt Enable bit)
     RISCV::ms_sstatus(RISCV::SSTATUS_SIE);
 
+    //Wait for all threads to finish
     while (!threads[1]->isFinished() || !TCB::schedulerIsEmpty()) {
         thread_dispatch();
     }
 
+    //Cleanup and halt
     for (auto &thread : threads) {
         delete thread;
     }

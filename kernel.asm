@@ -1583,7 +1583,7 @@ void printIntS(int xx, int base, int sgn) {
 
 000000008000204c <_Z8userMainv>:
 #include "../h/printing.hpp"
-
+//Defines user-level entry function
 void userMain() {
     8000204c:	fe010113          	addi	sp,sp,-32
     80002050:	00113c23          	sd	ra,24(sp)
@@ -2056,19 +2056,19 @@ void main() {
     80002564:	10579073          	csrw	stvec,a5
 
     thread_t threads[4];
-    thread_create(&threads[0], nullptr, nullptr);
+    thread_create(&threads[0], nullptr, nullptr);//Idle/main kernel thread
     80002568:	00000613          	li	a2,0
     8000256c:	00000593          	li	a1,0
     80002570:	fc040513          	addi	a0,s0,-64
     80002574:	fffff097          	auipc	ra,0xfffff
     80002578:	e60080e7          	jalr	-416(ra) # 800013d4 <_Z13thread_createPP3TCBPFvPvES2_>
-    TCB::running = threads[0]; // must be init. imm. after we create a thread for main
+    TCB::running = threads[0]; // must be init. imm. after we create a thread for main, without this scheduler and context switch have no reference to curr head
     8000257c:	fc043703          	ld	a4,-64(s0)
     80002580:	0000a797          	auipc	a5,0xa
     80002584:	6587b783          	ld	a5,1624(a5) # 8000cbd8 <_GLOBAL_OFFSET_TABLE_+0x50>
     80002588:	00e7b023          	sd	a4,0(a5)
 
-    // terminal thread for putc and initialize buffer for getc
+    //Terminal thread for putc and initialize buffer for getc
     Console::initInputBuffer();
     8000258c:	00000097          	auipc	ra,0x0
     80002590:	d64080e7          	jalr	-668(ra) # 800022f0 <_ZN7Console15initInputBufferEv>
@@ -2077,6 +2077,7 @@ void main() {
     80002598:	00000097          	auipc	ra,0x0
     8000259c:	dc8080e7          	jalr	-568(ra) # 80002360 <_ZN7Console18startOutputServiceEPP3TCB>
 
+    //Start user thread (first level user thread)
     thread_create(&threads[1], &userMainWrapper, nullptr);
     800025a0:	00000613          	li	a2,0
     800025a4:	00000597          	auipc	a1,0x0
@@ -2094,16 +2095,17 @@ inline void RISCV::ms_sstatus(size_t mask) {
     800025bc:	1007a073          	csrs	sstatus,a5
 }
     800025c0:	00c0006f          	j	800025cc <main+0x90>
-
+    //Enable interrupts and run scheduler (Enables supervisor Interrupt Enable bit)
     RISCV::ms_sstatus(RISCV::SSTATUS_SIE);
 
+    //Wait for all threads to finish
     while (!threads[1]->isFinished() || !TCB::schedulerIsEmpty()) {
         thread_dispatch();
     800025c4:	fffff097          	auipc	ra,0xfffff
     800025c8:	f1c080e7          	jalr	-228(ra) # 800014e0 <_Z15thread_dispatchv>
     while (!threads[1]->isFinished() || !TCB::schedulerIsEmpty()) {
     800025cc:	fc843783          	ld	a5,-56(s0)
-    //Exit the currently running thread (system call)
+    bool isFinished() const {return finished;}
     800025d0:	0207c783          	lbu	a5,32(a5)
     800025d4:	fe0788e3          	beqz	a5,800025c4 <main+0x88>
     800025d8:	00001097          	auipc	ra,0x1
@@ -2113,6 +2115,7 @@ inline void RISCV::ms_sstatus(size_t mask) {
     800025e8:	0080006f          	j	800025f0 <main+0xb4>
     }
 
+    //Cleanup and halt
     for (auto &thread : threads) {
     800025ec:	00848493          	addi	s1,s1,8
     800025f0:	fe040793          	addi	a5,s0,-32
@@ -2123,11 +2126,14 @@ inline void RISCV::ms_sstatus(size_t mask) {
     80002600:	00090513          	mv	a0,s2
     80002604:	00001097          	auipc	ra,0x1
     80002608:	ce8080e7          	jalr	-792(ra) # 800032ec <_ZN3TCBD1Ev>
-    //Currently running thread
+    static TCB *running;
+
+    void* operator new(size_t size) {return MemoryAllocator::mem_alloc(size);}
+    void* operator new[](size_t size) {return MemoryAllocator::mem_alloc(size);}
+    void operator delete(void *ptr) {MemoryAllocator::mem_free(ptr);}
     8000260c:	00090513          	mv	a0,s2
     80002610:	00001097          	auipc	ra,0x1
     80002614:	19c080e7          	jalr	412(ra) # 800037ac <_ZN15MemoryAllocator8mem_freeEPv>
-    static TCB *running;
     80002618:	fd5ff06f          	j	800025ec <main+0xb0>
     __asm__ volatile("mv t0, %0" : : "r" (retVal));
     __asm__ volatile ("sw t0, 80(x8)");
@@ -3450,7 +3456,6 @@ int TCB::createThread(TCB** thrHandle,Body b,void*arg,char *stack_space) {
     80003348:	00058913          	mv	s2,a1
     8000334c:	00060993          	mv	s3,a2
     80003350:	00068a13          	mv	s4,a3
-
     void* operator new(size_t size) {return MemoryAllocator::mem_alloc(size);}
     80003354:	03800513          	li	a0,56
     80003358:	00000097          	auipc	ra,0x0
@@ -3483,7 +3488,6 @@ int TCB::createThread(TCB** thrHandle,Body b,void*arg,char *stack_space) {
     800033ac:	fff00513          	li	a0,-1
     800033b0:	fd9ff06f          	j	80003388 <_ZN3TCB12createThreadEPPS_PFvPvES2_Pc+0x68>
     800033b4:	00050913          	mv	s2,a0
-    void* operator new[](size_t size) {return MemoryAllocator::mem_alloc(size);}
     void operator delete(void *ptr) {MemoryAllocator::mem_free(ptr);}
     800033b8:	00048513          	mv	a0,s1
     800033bc:	00000097          	auipc	ra,0x0
@@ -4135,11 +4139,11 @@ ConsoleBoundedBuffer::~ConsoleBoundedBuffer() {
     800039f4:	00913423          	sd	s1,8(sp)
     800039f8:	02010413          	addi	s0,sp,32
     800039fc:	00050493          	mv	s1,a0
-    delete buff;
+    delete[] buff;
     80003a00:	00853503          	ld	a0,8(a0)
     80003a04:	00050663          	beqz	a0,80003a10 <_ZN20ConsoleBoundedBufferD1Ev+0x28>
     80003a08:	fffff097          	auipc	ra,0xfffff
-    80003a0c:	d4c080e7          	jalr	-692(ra) # 80002754 <_ZdlPv>
+    80003a0c:	df4080e7          	jalr	-524(ra) # 800027fc <_ZdaPv>
 
     Semaphore::closeSemaphore(availableSpaces);
     80003a10:	0304b503          	ld	a0,48(s1)
@@ -4161,7 +4165,7 @@ ConsoleBoundedBuffer::~ConsoleBoundedBuffer() {
     delete availableItems;
     80003a40:	0284b503          	ld	a0,40(s1)
     80003a44:	00050663          	beqz	a0,80003a50 <_ZN20ConsoleBoundedBufferD1Ev+0x68>
-
+        MemoryAllocator::mem_free(ptr);
     80003a48:	00000097          	auipc	ra,0x0
     80003a4c:	d64080e7          	jalr	-668(ra) # 800037ac <_ZN15MemoryAllocator8mem_freeEPv>
     delete availableSpaces;
