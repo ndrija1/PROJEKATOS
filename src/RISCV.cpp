@@ -177,10 +177,11 @@ void RISCV::handleSupervisorTrap() {
 
         // Handle semaphores with timeouts
         Semaphore::allSemaphoresQueue.setFirst();
-        while (Semaphore::allSemaphoresQueue.getCurrent()!=nullptr) {
-            if (Semaphore::allSemaphoresQueue.getCurrent()->timeout<0) {
-                continue;
-            }
+	while (Semaphore::allSemaphoresQueue.getCurrent()!=nullptr) {
+	    if (Semaphore::allSemaphoresQueue.getCurrent()->timeout<0) {
+		Semaphore::allSemaphoresQueue.next();  // DODAJ OVO
+		continue;
+	    }
             Semaphore::allSemaphoresQueue.getCurrent()->timeout-=1;
             if (Semaphore::allSemaphoresQueue.getCurrent()->timeout==0) {
                 while (Semaphore::allSemaphoresQueue.getCurrent()->blockedQueue.peekFirst()) {
@@ -191,15 +192,21 @@ void RISCV::handleSupervisorTrap() {
             Semaphore::allSemaphoresQueue.next();
         }
 
-        // Handle sleeping threads
-        TCB::sleepingThreads.setFirst();
-        while (TCB::sleepingThreads.getCurrent()!=nullptr) {
-            TCB::sleepingThreads.getCurrent()->timeSleeping-=1;
-            if (TCB::sleepingThreads.getCurrent()->timeSleeping==0) {
-                Scheduler::put(TCB::sleepingThreads.removeCurrent());
+               // Handle sleeping threads
+        bool changed;
+        do {
+            changed = false;
+            TCB::sleepingThreads.setFirst();
+            while (TCB *thr = TCB::sleepingThreads.getCurrent()) {
+                thr->timeSleeping--;
+                if (thr->timeSleeping == 0) {
+                    Scheduler::put(TCB::sleepingThreads.removeCurrent());
+                    changed = true;
+                    break; // break from the inner while loop and restart traversal
+                }
+                TCB::sleepingThreads.next();
             }
-            TCB::sleepingThreads.next();
-        }
+        } while (changed);
 
         // Time slice
         TCB::timeSliceCounter++;
@@ -249,6 +256,9 @@ void RISCV::handleSupervisorTrap() {
         printIntS(scause);
         printStringS("\n sepc: ");
         printIntS(sepc);
-        while (true) {}
+       // while (true) {}
+        w_sstatus(r_sstatus());
+        w_sepc(sepc);
+        halt();
     }
 }
